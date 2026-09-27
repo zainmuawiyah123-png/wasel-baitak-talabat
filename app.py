@@ -78,23 +78,23 @@ def init_db():
     if c.fetchone()[0] == 0:
         default_stores = [
             ("سوبرماركت طبازه", "Groceries / بقالة", "0791111111", "الكرك - المرج", "15-25 mins", 1.25, "https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=300"),
-            ("مطعم الرمسي", "Food / مطاعم", "0795555555", "الكرك - جامعة مؤتة", "20-30 mins", 1.50, "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300"),
-            ("مطعم ليالي الكرك", "Food / مشاوي", "0796666666", "الكرك - الثنية", "25-40 mins", 2.00, "https://images.unsplash.com/photo-1544025162-d76694265947?w=300"),
-            ("محمص الشعب", "Sweets / محامص", "0798888888", "الكرك - وسط البلد", "10-20 mins", 1.00, "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=300")
+            ("مطعم الرمسي", "Food / مطاعم", "0795555555", "الكرك – شارع جامعة مؤته", "20-30 mins", 1.50, "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300"),
+            ("مطعم ليالي الكرك", "Food / مشاوي", "0796666666", "الكرك - المرج", "25-40 mins", 2.00, "https://images.unsplash.com/photo-1544025162-d76694265947?w=300"),
+            ("محمص الشعب", "Sweets / محامص", "0798888888", "الكرك - الثنيه", "10-20 mins", 1.00, " https://www.instagram.com/alshaeb.roasters_jordan/ ")
         ]
         c.executemany("INSERT OR IGNORE INTO stores (name, category, phone, location, delivery_time, delivery_fee, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)", default_stores)
         
         default_products = [
             ("سوبرماركت طبازه", "تموينات", "سكر الأسرة الناعم (5 كغ)", "سكر أبيض نقي", 3.75, "كيس", "https://images.unsplash.com/photo-1581441363689-1f3c3c342617?w=300", 0),
-            ("سوبرماركت طبازه", "دخان", "سجائر ونستون بلو (Winston Blue)", "سجائر أصلية", 2.60, "باكيت", "", 1),
-            ("مطعم الرمسي", "وجبات", "وجبة مندي لحم عجل", "أرز مندي مع لحم عجل طازج ولبن", 7.50, "وجبة", "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300", 0),
-            ("مطعم ليالي الكرك", "مشاوي", "مشاوي مشكلة عائلية (كيلو)", "تكة، كباب، وشيش طاووق مع المخللات", 14.00, "كيلو", "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300", 0),
+            ("سوبرماركت طبازه", "دخان", "سجائر ونستون بلو (Winston Blue)", "سجائر وينستون", 2.60, "باكيت", "", 1),
+            ("مطعم الرمسي", "وجبات", "وجبة مندي لحم خروف", "أرز مندي مع لحم خروف طازج ولبن", 7.50, "وجبة", "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300", 0),
+            ("مطعم ليالي الكرك", "مشاوي", "مشاوي مشكلة عائلية (كيلو)", "كيلو، كباب، وشيش طاووق مع المخللات", 18.00, "كيلو", "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300", 0),
             ("محمص الشعب", "قهوة ومكسرات", "بن تركي وسط محمش طازج (250 غم)", "قهوة ممتازة بالهيل", 3.50, "كيس", "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=300", 0)
         ]
         c.executemany("INSERT INTO products (store_name, category, item_name, description, price, unit_type, image_url, age_restricted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", default_products)
         
         default_drivers = [
-            ("خالد السائق", "0799999999", "سكوتر توصيل طلبات", "متوفر"),
+            ("معاذ المدادحة", "0799999999", "سياره", "متوفر"),
             ("عمر الكركي", "0798887766", "سيارة هبريد", "متوفر")
         ]
         c.executemany("INSERT INTO drivers (name, phone, vehicle_type, status) VALUES (?, ?, ?, ?)", default_drivers)
@@ -162,7 +162,7 @@ portal = str_app.sidebar.radio("القائمة الرئيسية:", [
 ])
 
 if "customer_name" not in str_app.session_state:
-    str_app.session_state.customer_name = "أبو عدي"
+    str_app.session_state.customer_name = "بوابة الكرك للطلبات"
     str_app.session_state.customer_address = "الكرك - المرج - بالقرب من جامعة مؤتة"
     str_app.session_state.customer_phone = "0797088219"
 
@@ -235,10 +235,10 @@ elif portal == "🏠 الرئيسية (Talabat Home)":
     categories_data = [
         ("🍔", "Food", "مطاعم ووجبات"),
         ("🚀", "Talabat Mart", "مارت وسريع"),
-        ("🛒", "Groceries", "سوبرماركت وخضار"),
-        ("🥩", "Stores", "لحوم وطازجة"),
-        ("🍰", "Sweets", "محامص وحلويات"),
-        ("💊", "Wellness", "صيدلية وعناية"),
+        ("🛒", "Groceries", "خضار وفواكه"),
+        ("🥩", "Stores", "لحوم طازجة بلدي"),
+        ("🍰", "Sweets", "كنافه وحلويات"),
+        ("💊", "Wellness", "صيدلية وومستلزمات تجميل"),
         ("🛍️", "Pickup", "استلام ذاتي"),
         ("❤️", "Donate", "تبرعات وخيرية")
     ]
@@ -343,7 +343,7 @@ elif portal == "🛒 تصفح المتاجر والسلة والدفع":
                     pay_method = str_app.selectbox("اختر طريقة الدفع الفوري أو النقدي:", [
                         "الدفع نقداً عند الاستلام (Cash on Delivery)",
                         "CliQ - تحويل فوري (رقم الحساب: 0797088219 - البنك الإسلامي الأردني)",
-                        "بنك الاتحاد (samaRza - تحويل مالي فوري)"
+                        "بنك الاتحاد (samarza - تحويل مالي فوري)"
                     ])
                     
                     submit_order = str_app.form_submit_button("🛒 إرسال الطلب الآن إلى الإدارة والمتجر 🚀")
