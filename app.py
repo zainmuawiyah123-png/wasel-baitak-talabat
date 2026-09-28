@@ -3,7 +3,6 @@ import streamlit as str_app
 import streamlit.components.v1 as components
 import pandas as pd
 import urllib.parse
-import qrcode
 from io import BytesIO
 from PIL import Image
 
