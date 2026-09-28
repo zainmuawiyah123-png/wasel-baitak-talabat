@@ -3,6 +3,9 @@ import streamlit as str_app
 import streamlit.components.v1 as components
 import pandas as pd
 import urllib.parse
+import qrcode
+from io import BytesIO
+from PIL import Image
 
 DB_NAME = "wasel_talabat_pro.db"
 
@@ -97,7 +100,6 @@ def init_db():
         )
     """)
     
-    # فحص وإضافة الأعمدة الجديدة للتوافق مع الإصدارات السابقة
     for table_name, col_def in [
         ("orders", "customer_lat REAL DEFAULT 31.2842"),
         ("orders", "customer_lon REAL DEFAULT 35.7048"),
@@ -531,7 +533,6 @@ elif portal == "🚚 تابع طلباتك ومسار الرحلة":
                 * 🎯 **موقعك (نقطة التسليم):** [فتح موقعك على الخريطة]({cust_map_link})
                 """)
                 
-                # خريطة توضيحية تفاعلية لمسار الرحلة بين المتجر والعميل
                 route_map_html = f"""
                 <div style="background: #e8f5e9; padding: 12px; border-radius: 8px; border: 1px solid #a5d6a7; text-align: center;">
                     <p style="margin: 0; font-weight: bold; color: #2e7d32;">📍 مسار الرحلة الجغرافي نشط لطلبك #{mid}</p>
@@ -554,7 +555,14 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
             play_sound_alert("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3")
             str_app.warning(f"🚨 يوجد {new_cnt} طلب جديد بانتظار الاعتماد!")
 
-        tab1, tab2, tab3, tab4, tab5 = str_app.tabs(["📦 إدارة ومتابعة الطلبات", "🏪 إدارة المتاجر والرقابة", "🍔 إدارة الأصناف والأسعار", "📥 الاستيراد الآلي (CSV)", "🛵 إدارة السائقين"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = str_app.tabs([
+            "📦 إدارة ومتابعة الطلبات", 
+            "🏪 إدارة المتاجر والرقابة", 
+            "🍔 إدارة الأصناف والأسعار", 
+            "📥 الاستيراد الآلي (CSV)", 
+            "🛵 إدارة السائقين",
+            "📱 توليد QR Code للدعاية"
+        ])
         
         with tab1:
             str_app.markdown("### 🔔 الطلبات الواردة ومواقع الزبائن والمتاجر وتوجيهها:")
@@ -719,6 +727,29 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
             all_drvs = c.fetchall()
             for did, dname, dph, dpin, dveh, dst in all_drvs:
                 str_app.write(f"- السائق: **{dname}** | الهاتف: {dph} | الرقم السري: `{dpin}` | المركبة: {dveh} | الحالة: `{dst}`")
+
+        with tab6:
+            str_app.markdown("### 📱 مولد رمز الاستجابة السريعة (QR Code) للحملات التسويقية")
+            str_app.info("أدخل رابط منصتك على الإنترنت لتوليد رمز QR جاهز للطباعة وتوزيعه على المحلات والطلاب في الكرك ومؤتة:")
+            
+            app_url_input = str_app.text_input("رابط التطبيق الخاص بك:", value="https://wasel-talabat-karak.streamlit.app")
+            
+            if app_url_input:
+                try:
+                    # توليد الـ QR Code
+                    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+                    qr.add_data(app_url_input)
+                    qr.make(fit=True)
+                    img = qr.make_image(fill_color="black", back_color="white")
+                    
+                    buffered = BytesIO()
+                    img.save(buffered, format="PNG")
+                    
+                    str_app.markdown("#### ✅ تم توليد الـ QR Code بنجاح:")
+                    str_app.image(buffered.getvalue(), width=250)
+                    str_app.success("يمكنك التقاط صورة للشاشة أو حفظ الرمز وطباعته مباشرة على الفلايرات والبوسترات التسويقية!")
+                except Exception as e:
+                    str_app.error(f"حدث خطأ أثناء توليد الـ QR: {e}")
 
 elif portal == "🏪 بوابة المتاجر (تجهيز الطلبات)":
     str_app.markdown("<h2 style='color: #ff5a00;'>🏪 بوابة المتاجر - تجهيز الطلبات (محمية برقم سري)</h2>", unsafe_allow_html=True)
