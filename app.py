@@ -1,6 +1,7 @@
 import sqlite3
 import streamlit as str_app
 import pandas as pd
+import urllib.parse
 
 DB_NAME = "wasel_talabat_pro.db"
 
@@ -167,6 +168,9 @@ def play_sound_alert(sound_url="https://assets.mixkit.co/active_storage/sfx/2869
 if "current_portal" not in str_app.session_state:
     str_app.session_state.current_portal = "👤 تسجيل البيانات الشخصية"
 
+if "selected_category" not in str_app.session_state:
+    str_app.session_state.selected_category = "الكل"
+
 str_app.sidebar.title("🧡 بوابة الكرك للطلبات")
 str_app.sidebar.markdown("---")
 
@@ -232,11 +236,20 @@ elif portal == "🏠 الرئيسية (Talabat Home)":
     cat_stores = [row[0] for row in c.fetchall()]
     categories_list = ["الكل"] + cat_stores
     
-    str_app.markdown("#### 📂 أقسام المتاجر والخدمات")
-    selected_cat = str_app.selectbox("اختر القسم:", categories_list, label_visibility="collapsed")
-    
+    str_app.markdown("#### 📂 أقسام المتاجر السريعة")
+    # عرض الأقسام بشكل صف أفقي (Row) متجاور لسهولة الاطلاع المباشر
+    cols_cat = str_app.columns(len(categories_list) if len(categories_list) > 0 else 1)
+    for idx, cat_name in enumerate(categories_list):
+        with cols_cat[idx % len(cols_cat)]:
+            is_selected = (str_app.session_state.selected_category == cat_name)
+            btn_label = f"🔥 {cat_name}" if is_selected else cat_name
+            if str_app.button(btn_label, key=f"cat_row_btn_{idx}"):
+                str_app.session_state.selected_category = cat_name
+                str_app.rerun()
+                
     str_app.markdown("---")
     
+    selected_cat = str_app.session_state.selected_category
     search_q = str_app.text_input("🔍 ابحث عن صنف أو متجر...", placeholder="ابحث عن مندي، سوبرماركت، بندورة...")
     if search_q.strip():
         str_app.markdown(f"### نتائج البحث عن: `{search_q}`")
@@ -266,7 +279,7 @@ elif portal == "🏠 الرئيسية (Talabat Home)":
                 str_app.markdown("</div>", unsafe_allow_html=True)
 
     str_app.markdown("---")
-    str_app.markdown("### 🛒 عينات المتاجر والأصناف في الكرك")
+    str_app.markdown(f"### 🛒 المتاجر والمطاعم في قسم: `{selected_cat}`")
     
     if selected_cat == "الكل":
         c.execute("SELECT name, category, delivery_time, delivery_fee, image_url FROM stores")
@@ -347,7 +360,7 @@ elif portal == "🛒 تصفح المتاجر والسلة والدفع":
                 str_app.markdown("</div>", unsafe_allow_html=True)
             
             str_app.markdown("---")
-            str_app.markdown("### 🛍️ محتويات سلة الطلبات الحالية:")
+            str_app.markdown("### 🛒 محتويات سلة الطلبات الحالية:")
             c.execute("SELECT id, store_name, item_name, price, qty, total FROM cart WHERE customer_phone = ?", (str_app.session_state.customer_phone,))
             cart_items = c.fetchall()
             
@@ -372,7 +385,13 @@ elif portal == "🛒 تصفح المتاجر والسلة والدفع":
                     c_name = str_app.text_input("الاسم الكامل:", value=str_app.session_state.customer_name)
                     c_phone = str_app.text_input("رقم الهاتف:", value=str_app.session_state.customer_phone)
                     c_addr = str_app.text_input("عنوان التوصيل بالتفصيل:", value=str_app.session_state.customer_address)
-                    pay_method = str_app.selectbox("طريقة الدفع:", ["الدفع نقداً عند الاستلام", "CliQ - تحويل فوري (0797088219)"])
+                    
+                    # خيارات الدفع المحدثة بالكامل
+                    pay_method = str_app.selectbox("طريقة الدفع:", [
+                        "الدفع نقداً عند الاستلام", 
+                        "CliQ - samarza (بنك الاتحاد)", 
+                        "CliQ - ميرال (البنك الإسلامي الأردني: 962797088219)"
+                    ])
                     
                     submit_order = str_app.form_submit_button("🛒 إرسال الطلب النهائي 🚀")
 
@@ -384,9 +403,24 @@ elif portal == "🛒 تصفح المتاجر والسلة والدفع":
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'جديد (بانتظار الإدارة)', 'لم يُعين بعد')
                         """, (c_name, c_phone, c_addr, chosen_store, items_desc_str, sub_total, current_delivery_fee, service_fee, grand_total, pay_method))
                         
+                        conn.commit()
+                        
+                        # جلب رقم الطلب الأخير لإرساله في رسالة الواتساب
+                        c.execute("SELECT last_insert_rowid()")
+                        new_order_id = c.fetchone()[0]
+                        
                         c.execute("DELETE FROM cart WHERE customer_phone = ?", (str_app.session_state.customer_phone,))
                         conn.commit()
+                        
                         str_app.success("🎉 تم إرسال طلبك بنجاح!")
+                        
+                        # إرسال رسالة واتساب لميرال (962797088219) تلقائياً عند تأكيد الطلب
+                        whatsapp_msg = f"طلب جديد # {new_order_id}%0aالزبون: {c_name}%0aالهاتف: {c_phone}%0aالعنوان: {c_addr}%0aالمتجر: {chosen_store}%0aالأصناف: {items_desc_str}%0aالإجمالي: {grand_total:.2f} د.أ%0aطريقة الدفع: {pay_method}"
+                        miral_phone = "962797088219"
+                        wa_url = f"https://api.whatsapp.com/send?phone={miral_phone}&text={whatsapp_msg}"
+                        
+                        str_app.markdown(f"### 📲 إرسال تفاصيل الطلب عبر الواتساب لميرال:")
+                        str_app.markdown(f"<a href='{wa_url}' target='_blank' style='background-color:#25d366; color:white; padding:10px 20px; border-radius:8px; text-decoration:none; font-weight:bold; display:inline-block;'>📤 اضغط هنا لإرسال تفاصيل الطلب عبر الواتساب لميرال</a>", unsafe_allow_html=True)
                         
                         if str_app.button("🏠 العودة للرئيسية لإضافة طلب آخر"):
                             str_app.session_state.current_portal = "🏠 الرئيسية (Talabat Home)"
@@ -410,19 +444,31 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
         tab1, tab2, tab3, tab4, tab5 = str_app.tabs(["📦 إدارة ومتابعة الطلبات", "🏪 إدارة المتاجر", "🍔 إدارة الأصناف والأسعار", "📥 الاستيراد الآلي (CSV)", "🛵 إدارة السائقين"])
         
         with tab1:
-            str_app.markdown("### 🔔 الطلبات الواردة وتوجيهها:")
+            str_app.markdown("### 🔔 الطلبات الواردة وتوجيهها وإرسالها للبائع:")
             c.execute("SELECT id, customer_name, customer_phone, customer_address, store_name, items_desc, grand_total, payment_method, order_status, assigned_driver FROM orders ORDER BY id DESC")
             orders_all = c.fetchall()
             if not orders_all:
                 str_app.info("لا توجد طلبات جديدة حالياً.")
             else:
-                c.execute("SELECT name FROM drivers")
-                drivers_list = [d[0] for d in c.fetchall()]
+                c.execute("SELECT name, phone FROM drivers")
+                drivers_data_all = c.fetchall()
+                drivers_list = [d[0] for d in drivers_data_all]
+                
                 for ord_item in orders_all:
                     oid, ocname, ocphone, ocaddr, ostore, oitems, otot, opay, ostat, odrv = ord_item
                     with str_app.expander(f"طلب رقم #{oid} | متجر: {ostore} | الزبون: {ocname} | الحالة: [{ostat}]"):
                         str_app.write(f"📱 الهاتف: {ocphone} | العنوان: {ocaddr}")
-                        str_app.write(f"🛒 الأصناف: {oitems} | الإجمالي: {otot:.2f} د.أ")
+                        str_app.write(f"🛒 الأصناف: {oitems} | الإجمالي: {otot:.2f} د.أ | الدفع: {opay}")
+                        
+                        # زر إرسال واتساب من الإدارة إلى البائع مباشرة مع التنبيه
+                        c.execute("SELECT phone FROM stores WHERE name = ?", (ostore,))
+                        st_phone_row = c.fetchone()
+                        store_contact_phone = st_phone_row[0] if st_phone_row and st_phone_row[0] else "962790000000"
+                        
+                        seller_msg = f"طلب جديد رقم #{oid} موجه لمتجركم ({ostore})%0aالزبون: {ocname}%0aالهاتف: {ocphone}%0aالعنوان: {ocaddr}%0aالأصناف المطلوب تجهيزها: {oitems}%0aالمبلغ المطلوب تحصيله: {otot:.2f} د.أ (%0aطريقة الدفع: {opay})%0aيرجى التجهيز الفوري!"
+                        seller_wa_url = f"https://api.whatsapp.com/send?phone={store_contact_phone}&text={seller_msg}"
+                        
+                        str_app.markdown(f"<a href='{seller_wa_url}' target='_blank' style='background-color:#25d366; color:white; padding:8px 15px; border-radius:6px; text-decoration:none; font-weight:bold; display:inline-block; margin-bottom:10px;'>📤 إرسال تفاصيل الطلب للبائع عبر الواتساب</a>", unsafe_allow_html=True)
                         
                         col_st1, col_st2 = str_app.columns(2)
                         with col_st1:
@@ -441,7 +487,7 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
             with str_app.form("add_store_form"):
                 ns_name = str_app.text_input("اسم المتجر أو المطعم:")
                 ns_cat = str_app.text_input("التصنيف (مثال: مطاعم):")
-                ns_phone = str_app.text_input("رقم هاتف المتجر:")
+                ns_phone = str_app.text_input("رقم هاتف المتجر (لإرسال الطلبات واتساب):")
                 ns_loc = str_app.text_input("العنوان والمنطقة:")
                 ns_time = str_app.text_input("وقت التوصيل:", value="15-25 mins")
                 ns_fee = str_app.number_input("أجور التوصيل (د.أ):", value=1.50)
@@ -494,7 +540,6 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
             if uploaded_file is not None and target_csv_store:
                 try:
                     df_upload = pd.read_csv(uploaded_file)
-                    # دعم مسميات الأعمدة العربية والإنجليزية بمرونة تامة
                     col_map = {}
                     for col in df_upload.columns:
                         c_clean = str(col).strip().lower()
@@ -561,7 +606,7 @@ elif portal == "🏪 بوابة المتاجر (تجهيز الطلبات)":
             for so in c.fetchall():
                 so_id, so_cn, so_cp, so_ca, so_it, so_tot, so_pay, so_st, so_drv = so
                 with str_app.expander(f"طلب #{so_id} للزبون {so_cn} | الحالة: [{so_st}]"):
-                    str_app.write(f"📱 الهاتف: {so_cp} | العنوان: {so_ca} | الأصناف: {so_it} | الإجمالي: {so_tot:.2f} د.أ")
+                    str_app.write(f"📱 الهاتف: {so_cp} | العنوان: {so_ca} | الأصناف: {so_it} | الإجمالي: {so_tot:.2f} د.أ | الدفع: {so_pay}")
                     if str_app.button(f"تجهيز الطلب #{so_id}", key=f"prep_store_{so_id}"):
                         c.execute("UPDATE orders SET order_status = 'جاري التجهيز بالمطعم/المتجر' WHERE id = ?", (so_id,))
                         conn.commit()
