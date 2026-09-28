@@ -1,4 +1,3 @@
-
 import sqlite3
 import streamlit as str_app
 import streamlit.components.v1 as components
@@ -29,6 +28,7 @@ def init_db():
             name TEXT PRIMARY KEY, 
             category TEXT, 
             phone TEXT, 
+            pin_code TEXT DEFAULT '1111',
             location TEXT,
             lat REAL,
             lon REAL,
@@ -91,12 +91,13 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
             phone TEXT, 
+            pin_code TEXT DEFAULT '2222',
             vehicle_type TEXT,
             status TEXT DEFAULT 'متوفر'
         )
     """)
     
-    # التحقق التلقائي من الأعمدة وإضافتها إذا لم تكن موجودة لتجنب أي خطأ
+    # فحص وإضافة الأعمدة الجديدة للتوافق مع الإصدارات السابقة
     for table_name, col_def in [
         ("orders", "customer_lat REAL DEFAULT 31.2842"),
         ("orders", "customer_lon REAL DEFAULT 35.7048"),
@@ -104,25 +105,27 @@ def init_db():
         ("orders", "store_lon REAL DEFAULT 35.7048"),
         ("stores", "lat REAL DEFAULT 31.2842"),
         ("stores", "lon REAL DEFAULT 35.7048"),
+        ("stores", "pin_code TEXT DEFAULT '1111'"),
+        ("drivers", "pin_code TEXT DEFAULT '2222'"),
         ("customers", "lat REAL DEFAULT 31.2842"),
         ("customers", "lon REAL DEFAULT 35.7048")
     ]:
         try:
             c.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_def}")
         except sqlite3.OperationalError:
-            pass # العمود موجود مسبقاً
+            pass
             
     conn.commit()
     
     c.execute("SELECT COUNT(*) FROM stores")
     if c.fetchone()[0] == 0:
         default_stores = [
-            ("سوبرماركت طبازه", "Groceries / بقالة", "0791111111", "الكرك - المرج", 31.2855, 35.7032, "15-25 mins", 1.25, "https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=300"),
-            ("مطعم الرمسي", "Food / مطاعم", "0795555555", "الكرك – شارع جامعة مؤته", 31.2820, 35.7010, "20-30 mins", 1.50, "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300"),
-            ("مطعم ليالي الكرك", "Food / مشاوي", "0796666666", "الكرك - المرج", 31.2860, 35.7050, "25-40 mins", 2.00, "https://images.unsplash.com/photo-1544025162-d76694265947?w=300"),
-            ("محمص الشعب", "Sweets /محامص", "0798888888", "الكرك - الثنيه", 31.2900, 35.7100, "10-20 mins", 1.00, "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=300")
+            ("سوبرماركت طبازه", "Groceries / بقالة", "0791111111", "1111", "الكرك - المرج", 31.2855, 35.7032, "15-25 mins", 1.25, "https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=300"),
+            ("مطعم الرمسي", "Food / مطاعم", "0795555555", "1111", "الكرك – شارع جامعة مؤته", 31.2820, 35.7010, "20-30 mins", 1.50, "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300"),
+            ("مطعم ليالي الكرك", "Food / مشاوي", "0796666666", "1111", "الكرك - المرج", 31.2860, 35.7050, "25-40 mins", 2.00, "https://images.unsplash.com/photo-1544025162-d76694265947?w=300"),
+            ("محمص الشعب", "Sweets /محامص", "0798888888", "1111", "الكرك - الثنيه", 31.2900, 35.7100, "10-20 mins", 1.00, "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=300")
         ]
-        c.executemany("INSERT OR IGNORE INTO stores (name, category, phone, location, lat, lon, delivery_time, delivery_fee, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", default_stores)
+        c.executemany("INSERT OR IGNORE INTO stores (name, category, phone, pin_code, location, lat, lon, delivery_time, delivery_fee, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", default_stores)
         
         default_products = [
             ("سوبرماركت طبازه", "تموينات", "سكر الأسرة الناعم (5 كغ)", "سكر أبيض نقي", 3.75, "كيس", "https://images.unsplash.com/photo-1581441363689-1f3c3c342617?w=300", 0),
@@ -134,10 +137,10 @@ def init_db():
         c.executemany("INSERT INTO products (store_name, category, item_name, description, price, unit_type, image_url, age_restricted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", default_products)
         
         default_drivers = [
-            ("معاذ المدادحة", "0799999999", "سياره", "متوفر"),
-            ("عمر الكركي", "0798887766", "سيارة هبريد", "متوفر")
+            ("معاذ المدادحة", "0799999999", "2222", "سياره", "متوفر"),
+            ("عمر الكركي", "0798887766", "2222", "سيارة هبريد", "متوفر")
         ]
-        c.executemany("INSERT INTO drivers (name, phone, vehicle_type, status) VALUES (?, ?, ?, ?)", default_drivers)
+        c.executemany("INSERT INTO drivers (name, phone, pin_code, vehicle_type, status) VALUES (?, ?, ?, ?, ?)", default_drivers)
         conn.commit()
          
     conn.close()
@@ -210,6 +213,7 @@ portal_options = [
     "👤 تسجيل البيانات الشخصية",
     "🏠 الرئيسية (Talabat Home)",
     "🛒 تصفح المتاجر والسلة والدفع",
+    "🚚 تابع طلباتك ومسار الرحلة",
     "🔔 لوحة الإدارة المركزية (تحكم كامل)",
     "🏪 بوابة المتاجر (تجهيز الطلبات)",
     "🛵 بوابة السائقين (الاستلام والتوصيل)"
@@ -498,6 +502,45 @@ elif portal == "🛒 تصفح المتاجر والسلة والدفع":
             else:
                 str_app.info("السلة فارغة حالياً. قم بتحديد الكمية واضغط على 'أضف إلى السلة' لكل صنف ترغب به.")
 
+elif portal == "🚚 تابع طلباتك ومسار الرحلة":
+    str_app.markdown("<h2 style='color: #ff5a00;'>🚚 تتبع طلباتك ومسار الرحلة المباشر</h2>", unsafe_allow_html=True)
+    cust_phone_track = str_app.text_input("أدخل رقم هاتفك المسجل لعرض طلباتك وتتبعها:", value=str_app.session_state.customer_phone)
+    
+    if cust_phone_track.strip():
+        c.execute("SELECT id, store_name, store_lat, store_lon, customer_lat, customer_lon, items_desc, grand_total, order_status, assigned_driver FROM orders WHERE customer_phone = ? ORDER BY id DESC", (cust_phone_track.strip(),))
+        my_orders = c.fetchall()
+        
+        if not my_orders:
+            str_app.info("لا توجد طلبات مسجلة بهذا الرقم حالياً.")
+        else:
+            for mo in my_orders:
+                mid, mstore, mslat, mslon, mclat, mclon, mitems, mtot, mstat, mdrv = mo
+                str_app.markdown("<div class='product-card'>", unsafe_allow_html=True)
+                str_app.markdown(f"### 📦 طلب رقم #{mid} - المتجر: `{mstore}`")
+                str_app.write(f"🛒 الأصناف: {mitems}")
+                str_app.write(f"💰 المبلغ الإجمالي: **{mtot:.2f} د.أ** | السائق المعين: `{mdrv}`")
+                str_app.markdown(f"📌 **حالة الطلب الحالية:** `{mstat}`")
+                
+                str_app.markdown("#### 🗺️ مسار رحلة الطلب المباشر:")
+                store_map_link = f"https://maps.google.com/?q={mslat},{mslon}"
+                cust_map_link = f"https://maps.google.com/?q={mclat},{mclon}"
+                
+                str_app.markdown(f"""
+                * 🏪 **موقع المتجر (نقطة الاستلام):** [فتح موقع المتجر على الخريطة]({store_map_link})
+                * 🛵 **حالة السائق:** {mdrv if mdrv != 'لم يُعين بعد' else 'جاري توقيت سائق لتوصيل طلبك'}
+                * 🎯 **موقعك (نقطة التسليم):** [فتح موقعك على الخريطة]({cust_map_link})
+                """)
+                
+                # خريطة توضيحية تفاعلية لمسار الرحلة بين المتجر والعميل
+                route_map_html = f"""
+                <div style="background: #e8f5e9; padding: 12px; border-radius: 8px; border: 1px solid #a5d6a7; text-align: center;">
+                    <p style="margin: 0; font-weight: bold; color: #2e7d32;">📍 مسار الرحلة الجغرافي نشط لطلبك #{mid}</p>
+                    <p style="margin: 5px 0 0 0; font-size: 13px; color: #555;">من المتجر ({mstore}) ➔ إلى عنوان استلامك المحدد.</p>
+                </div>
+                """
+                components.html(route_map_html, height=80)
+                str_app.markdown("</div>", unsafe_allow_html=True)
+
 elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل)":
     str_app.markdown("<h2 style='color: #ff5a00;'>🔔 لوحة التحكم المركزية (الإدارة)</h2>", unsafe_allow_html=True)
     admin_pass = str_app.text_input("أدخل رمز سر الإدارة:", type="password")
@@ -511,7 +554,7 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
             play_sound_alert("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3")
             str_app.warning(f"🚨 يوجد {new_cnt} طلب جديد بانتظار الاعتماد!")
 
-        tab1, tab2, tab3, tab4, tab5 = str_app.tabs(["📦 إدارة ومتابعة الطلبات", "🏪 إدارة المتاجر", "🍔 إدارة الأصناف والأسعار", "📥 الاستيراد الآلي (CSV)", "🛵 إدارة السائقين"])
+        tab1, tab2, tab3, tab4, tab5 = str_app.tabs(["📦 إدارة ومتابعة الطلبات", "🏪 إدارة المتاجر والرقابة", "🍔 إدارة الأصناف والأسعار", "📥 الاستيراد الآلي (CSV)", "🛵 إدارة السائقين"])
         
         with tab1:
             str_app.markdown("### 🔔 الطلبات الواردة ومواقع الزبائن والمتاجر وتوجيهها:")
@@ -555,11 +598,14 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
                             str_app.rerun()
 
         with tab2:
-            str_app.markdown("### 🏪 إدارة المتاجر وإحداثياتها:")
+            str_app.markdown("### 🏪 إدارة المتاجر وإحداثياتها وأرقامها السرية:")
+            
             with str_app.form("add_store_form"):
-                ns_name = str_app.text_input("اسم المتجر أو المطعم:")
+                str_app.markdown("#### إضافة متجر جديد أو تحديث بياناته ورقمة السري")
+                ns_name = str_app.text_input("اسم المتجر أو المطعم (مفتاح أساسي للتعديل أو الإضافة):")
                 ns_cat = str_app.text_input("التصنيف (مثال: مطاعم):")
                 ns_phone = str_app.text_input("رقم هاتف المتجر (لإرسال الطلبات واتساب):")
+                ns_pin = str_app.text_input("الرقم السري الخاص بداخل المتجر (PIN):", value="1111", type="password")
                 ns_loc = str_app.text_input("العنوان والمنطقة:")
                 ns_slat = str_app.number_input("خط عرض المتجر (Lat):", value=31.2842, format="%.6f")
                 ns_slon = str_app.number_input("خط طول المتجر (Lon):", value=35.7048, format="%.6f")
@@ -567,15 +613,38 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
                 ns_fee = str_app.number_input("أجور التوصيل (د.أ):", value=1.50)
                 ns_img = str_app.text_input("رابط صورة المتجر (اختياري):")
                 
-                if str_app.form_submit_button("حفظ المتجر ➕"):
+                if str_app.form_submit_button("حفظ أو تحديث المتجر ➕"):
                     if ns_name.strip():
-                        c.execute("INSERT OR REPLACE INTO stores (name, category, phone, location, lat, lon, delivery_time, delivery_fee, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                  (ns_name, ns_cat, ns_phone, ns_loc, ns_slat, ns_slon, ns_time, ns_fee, ns_img))
+                        c.execute("INSERT OR REPLACE INTO stores (name, category, phone, pin_code, location, lat, lon, delivery_time, delivery_fee, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                  (ns_name, ns_cat, ns_phone, ns_pin, ns_loc, ns_slat, ns_slon, ns_time, ns_fee, ns_img))
                         conn.commit()
                         str_app.success(f"✅ تم حفظ المتجر '{ns_name}' بنجاح!")
                         str_app.rerun()
                     else:
                         str_app.error("يرجى إدخال اسم المتجر.")
+
+            str_app.markdown("---")
+            str_app.markdown("### 📋 قائمة المتاجر المسجلة (تعديل أو حذف):")
+            c.execute("SELECT name, category, phone, pin_code, location, lat, lon, delivery_time, delivery_fee FROM stores")
+            db_stores = c.fetchall()
+            
+            if not db_stores:
+                str_app.info("لا توجد متاجر مسجلة حالياً.")
+            else:
+                for st_row in db_stores:
+                    st_name, st_cat, st_phone, st_pin, st_loc, st_lat, st_lon, st_time, st_fee = st_row
+                    with str_app.expander(f"🏪 متجر: {st_name} ({st_cat}) | الرقم السري: {st_pin}"):
+                        str_app.write(f"📱 الهاتف: {st_phone} | 📍 العنوان: {st_loc}")
+                        str_app.write(f"🌐 الإحداثيات: Lat: {st_lat}, Lon: {st_lon} | ⏱️ الوقت: {st_time} | 🚚 التوصيل: {st_fee} د.أ")
+                        
+                        col_del_btn, col_dummy = str_app.columns([1, 4])
+                        with col_del_btn:
+                            if str_app.button(f"حذف المتجر ❌", key=f"del_store_{st_name}"):
+                                c.execute("DELETE FROM stores WHERE name = ?", (st_name,))
+                                c.execute("DELETE FROM products WHERE store_name = ?", (st_name,))
+                                conn.commit()
+                                str_app.success(f"🗑️ تم حذف المتجر '{st_name}' وجميع أصنافه بنجاح!")
+                                str_app.rerun()
 
         with tab3:
             str_app.markdown("### 🍔 إضافة أو حذف الأصناف:")
@@ -591,144 +660,162 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
                     p_price = str_app.number_input("السعر (بالدينار):", min_value=0.01, value=0.75, step=0.05)
                     p_unit = str_app.text_input("وحدة القياس:", value="كيلو")
                     p_img = str_app.text_input("رابط صورة المنتج (اختياري):")
-                    p_age = str_app.checkbox("صنف مقيد العمر (مثل التبغ 19+) 🔒")
+                    p_age = str_app.checkbox("صنف مقيد العمر (19+ - مثل الدخان والتبغ)")
                     
-                    if str_app.form_submit_button("إضافة الصنف 🚀"):
+                    if str_app.form_submit_button("إضافة الصنف للمتجر 🚀"):
                         if p_name.strip():
-                            c.execute("INSERT INTO products (store_name, category, item_name, description, price, unit_type, image_url, age_restricted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
+                            c.execute("INSERT INTO products (store_name, category, item_name, description, price, unit_type, image_url, age_restricted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                                       (p_store, p_cat, p_name, p_desc, p_price, p_unit, p_img, 1 if p_age else 0))
                             conn.commit()
-                            str_app.success(f"✅ تمت إضافة الصنف '{p_name}' بنجاح!")
+                            str_app.success(f"✅ تم إضافة الصنف '{p_name}' إلى متجر '{p_store}' بنجاح!")
+                            str_app.rerun()
                         else:
                             str_app.error("يرجى إدخال اسم الصنف.")
+            else:
+                str_app.warning("يرجى إضافة متجر أولاً قبل إضافة الأصناف.")
 
         with tab4:
-            str_app.markdown("### 📥 الاستيراد والتحديث الآلي للأسعار (CSV Import)")
-            c.execute("SELECT name FROM stores")
-            csv_stores_list = [s[0] for s in c.fetchall()]
-            target_csv_store = str_app.selectbox("اختر المتجر المراد تحديث أصنافه:", csv_stores_list) if csv_stores_list else None
+            str_app.markdown("### 📥 الاستيراد الآلي (CSV) للأصناف والأسعار:")
+            str_app.info("قم برفع ملف CSV يحتوي على الأعمدة: (اسم الصنف، السعر) بترميز UTF-8 لتجنب مشاكل الحروف العربية.")
+            st_import_store = str_app.selectbox("اختر المتجر لتحديث أصنافه عبر الملف:", st_names_list if st_names_list else [""], key="import_st_box")
+            csv_file_up = str_app.file_uploader("اختر ملف الـ CSV:", type=["csv"])
             
-            uploaded_file = str_app.file_uploader("اختر ملف الـ CSV", type=["csv"])
-            if uploaded_file is not None and target_csv_store:
+            if csv_file_up and st_import_store:
                 try:
-                    df_upload = pd.read_csv(uploaded_file)
-                    col_map = {}
-                    for col in df_upload.columns:
-                        c_clean = str(col).strip().lower()
-                        if 'اسم' in c_clean or 'name' in c_clean or 'item' in c_clean:
-                            col_map['item_name'] = col
-                        elif 'سعر' in c_clean or 'price' in c_clean:
-                            col_map['price'] = col
-                        elif 'صو' in c_clean or 'image' in c_clean or 'img' in c_clean:
-                            col_map['image_url'] = col
+                    df_imported = pd.read_csv(csv_file_up, encoding='utf-8')
+                    str_app.write("معاينة البيانات المستوردة من الملف:")
+                    str_app.dataframe(df_imported.head())
                     
-                    if 'item_name' in col_map and 'price' in col_map:
-                        str_app.write("معاينة سريعة للبيانات المستوردة:", df_upload.head())
-                        if str_app.button("🚀 تأكيد وتحديث قاعدة البيانات الآن"):
-                            count = 0
-                            for _, r in df_upload.iterrows():
-                                i_name = str(r[col_map['item_name']])
-                                i_price = float(r[col_map['price']])
-                                i_img = str(r[col_map['image_url']]) if 'image_url' in col_map else ""
-                                
-                                c.execute('''
-                                    INSERT OR REPLACE INTO products (store_name, category, item_name, description, price, unit_type, image_url)
-                                    VALUES (?, 'عام', ?, '', ?, 'وحدة', ?)
-                                ''', (target_csv_store, i_name, i_price, i_img))
-                                count += 1
-                            conn.commit()
-                            str_app.success(f"تم تحديث واستيراد {count} صنف لمتجر '{target_csv_store}' بنجاح!")
-                            str_app.rerun()
-                    else:
-                        str_app.error("يجب أن يحتوي ملف الـ CSV على أعمدة تدل على (اسم الصنف) و (السعر).")
+                    if str_app.button("تأكيد وحفظ الأصناف المستوردة بالمتجر 🚀"):
+                        count_ins = 0
+                        for _, row in df_imported.iterrows():
+                            col_item_name = str(row.iloc[0]).strip()
+                            col_price = float(row.iloc[1]) if pd.notnull(row.iloc[1]) else 0.0
+                            if col_item_name and col_item_name != 'nan':
+                                c.execute("INSERT INTO products (store_name, category, item_name, description, price, unit_type) VALUES (?, ?, ?, ?, ?, ?)",
+                                          (st_import_store, "عام", col_item_name, "مستورد عبر CSV", col_price, "عدد"))
+                                count_ins += 1
+                        conn.commit()
+                        str_app.success(f"✅ تم بنجاح استيراد وإضافة {count_ins} صنفاً لمتجر '{st_import_store}'!")
                 except Exception as e:
-                    str_app.error(f"حدث خطأ أثناء قراءة الملف: {e}")
+                    str_app.error(f"حدث خطأ أثناء قراءة الملف تأكد من الترميز (UTF-8) وصيغة الأعمدة: {e}")
 
         with tab5:
-            str_app.markdown("### 🛵 إدارة السائقين:")
-            with str_app.form("add_driver_form"):
-                d_name = str_app.text_input("اسم السائق الكامل:")
-                d_phone = str_app.text_input("رقم الهاتف:")
-                d_veh = str_app.text_input("نوع المركبة:", value="سكوتر توصيل")
-                if str_app.form_submit_button("تسجيل السائق ➕"):
+            str_app.markdown("### 🛵 إدارة السائقين وأرقامهم السرية:")
+            with str_app.form("driver_add_form"):
+                d_name = str_app.text_input("اسم السائق:")
+                d_phone = str_app.text_input("رقم هاتف السائق:")
+                d_pin = str_app.text_input("الرقم السري للسائق (PIN):", value="2222", type="password")
+                d_veh = str_app.text_input("نوع المركبة:", value="سيارة")
+                if str_app.form_submit_button("إضافة سائق جديد ➕"):
                     if d_name.strip():
-                        c.execute("INSERT INTO drivers (name, phone, vehicle_type, status) VALUES (?, ?, ?, 'متوفر')", (d_name, d_phone, d_veh))
+                        c.execute("INSERT INTO drivers (name, phone, pin_code, vehicle_type, status) VALUES (?, ?, ?, ?, 'متوفر')", (d_name, d_phone, d_pin, d_veh))
                         conn.commit()
-                        str_app.success(f"✅ تم تسجيل السائق {d_name}!")
+                        str_app.success(f"✅ تم إضافة السائق '{d_name}' بنجاح!")
                         str_app.rerun()
-                    else:
-                        str_app.error("يرجى إدخال اسم السائق.")
-    elif admin_pass != "":
-        str_app.error("رمز سر الإدارة غير صحيح.")
+            
+            str_app.markdown("#### السائقون المسجلون:")
+            c.execute("SELECT id, name, phone, pin_code, vehicle_type, status FROM drivers")
+            all_drvs = c.fetchall()
+            for did, dname, dph, dpin, dveh, dst in all_drvs:
+                str_app.write(f"- السائق: **{dname}** | الهاتف: {dph} | الرقم السري: `{dpin}` | المركبة: {dveh} | الحالة: `{dst}`")
 
 elif portal == "🏪 بوابة المتاجر (تجهيز الطلبات)":
-    str_app.markdown("<h2 style='color: #ff5a00;'>🏪 بوابة المتاجر والمطاعم</h2>", unsafe_allow_html=True)
-    store_pass = str_app.text_input("أدخل كلمة مرور المتاجر:", type="password")
-    if store_pass == "5678":
-        c.execute("SELECT name FROM stores")
-        stores_opt = [s[0] for s in c.fetchall()]
-        my_store = str_app.selectbox("اختر متجرك:", stores_opt) if stores_opt else None
-        if my_store:
-            c.execute("SELECT COUNT(*) FROM orders WHERE store_name = ? AND order_status LIKE '%جديد%'", (my_store,))
-            if c.fetchone()[0] > 0:
-                play_sound_alert("https://assets.mixkit.co/active_storage/sfx/2860/2860-preview.mp3")
-                str_app.warning("🛎️ تنبيه بوجود طلب جديد موجه لمتجرك!")
-            
-            c.execute("SELECT id, customer_name, customer_phone, customer_address, customer_lat, customer_lon, items_desc, grand_total, payment_method, order_status, assigned_driver FROM orders WHERE store_name = ? ORDER BY id DESC", (my_store,))
-            for so in c.fetchall():
-                so_id, so_cn, so_cp, so_ca, so_clat, so_clon, so_it, so_tot, so_pay, so_st, so_drv = so
-                with str_app.expander(f"طلب #{so_id} للزبون {so_cn} | الحالة: [{so_st}]"):
-                    cust_map_url = f"https://maps.google.com/?q={so_clat},{so_clon}"
-                    str_app.write(f"📱 الهاتف: {so_cp} | العنوان: {so_ca}")
-                    str_app.markdown(f"📍 **لوكيشن العميل:** [<a href='{cust_map_url}' target='_blank'>فتح موقع العميل على خرائط جوجل</a>]", unsafe_allow_html=True)
-                    str_app.write(f"🛒 الأصناف: {so_it} | الإجمالي: {so_tot:.2f} د.أ | الدفع: {so_pay}")
-                    if str_app.button(f"تجهيز الطلب #{so_id}", key=f"prep_store_{so_id}"):
-                        c.execute("UPDATE orders SET order_status = 'جاري التجهيز بالمطعم/المتجر' WHERE id = ?", (so_id,))
-                        conn.commit()
-                        str_app.success("✅ تم تحديث الحالة!")
-                        str_app.rerun()
+    str_app.markdown("<h2 style='color: #ff5a00;'>🏪 بوابة المتاجر - تجهيز الطلبات (محمية برقم سري)</h2>", unsafe_allow_html=True)
+    
+    c.execute("SELECT name FROM stores")
+    st_names_portal = [s[0] for s in c.fetchall()]
+    chosen_portal_store = str_app.selectbox("اختر متجرك:", st_names_portal if st_names_portal else [""])
+    store_entered_pin = str_app.text_input("أدخل الرقم السري الخاص بالمتجر:", type="password")
+    
+    auth_store_ok = False
+    if chosen_portal_store and store_entered_pin:
+        c.execute("SELECT pin_code FROM stores WHERE name = ?", (chosen_portal_store,))
+        row_pin = c.fetchone()
+        if row_pin and row_pin[0] == store_entered_pin:
+            auth_store_ok = True
+        else:
+            str_app.error("❌ الرقم السري غير صحيح يرجى التأكد من إدارة المنصة.")
+
+    if auth_store_ok and chosen_portal_store:
+        str_app.success(f"🔓 تم تسجيل الدخول بنجاح لمتجر: {chosen_portal_store}")
+        
+        c.execute("SELECT COUNT(*) FROM orders WHERE store_name = ? AND order_status LIKE '%جديد%'", (chosen_portal_store,))
+        st_new_orders_cnt = c.fetchone()[0]
+        if st_new_orders_cnt > 0:
+            play_sound_alert("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3")
+            str_app.warning(f"🔔 تنبيه: يوجد {st_new_orders_cnt} طلب جديد بانتظار التجهيز في متجرك!")
+
+        c.execute("SELECT id, customer_name, customer_phone, customer_address, items_desc, grand_total, payment_method, order_status FROM orders WHERE store_name = ? ORDER BY id DESC", (chosen_portal_store,))
+        store_orders = c.fetchall()
+        if not store_orders:
+            str_app.info(f"لا توجد طلبات موجهة حالياً لمتجر '{chosen_portal_store}'.")
+        else:
+            for so in store_orders:
+                so_id, so_cname, so_cphone, so_caddr, so_items, so_tot, so_pay, so_stat = so
+                str_app.markdown(f"<div class='product-card'>", unsafe_allow_html=True)
+                str_app.markdown(f"### طلب رقم #{so_id} - الزبون: {so_cname}")
+                str_app.write(f"📱 هاتف الزبون: {so_cphone} | 📍 العنوان: {so_caddr}")
+                str_app.write(f"🛒 الأصناف المطلوبة: {so_items}")
+                str_app.write(f"💰 المجموع: {so_tot:.2f} د.أ | الدفع: {so_pay} | الحالة الحالية: **{so_stat}**")
+                
+                new_st_store = str_app.selectbox(f"تحديث حالة الطلب #{so_id}", ["جديد (بانتظار الإدارة)", "تم الاعتماد وبانتظار تجهيز المتجر", "جاري التجهيز بالمطعم/المتجر", "جاهز للاستلام من السائق", "تم التسليم بنجاح"], key=f"st_portal_up_{so_id}")
+                if str_app.button(f"حفظ حالة الطلب #{so_id}", key=f"st_portal_btn_{so_id}"):
+                    c.execute("UPDATE orders SET order_status = ? WHERE id = ?", (new_st_store, so_id))
+                    conn.commit()
+                    str_app.success(f"✅ تم تحديث حالة الطلب #{so_id} بنجاح!")
+                    str_app.rerun()
+                str_app.markdown("</div>", unsafe_allow_html=True)
 
 elif portal == "🛵 بوابة السائقين (الاستلام والتوصيل)":
-    str_app.markdown("<h2 style='color: #ff5a00;'>🛵 بوابة السائقين والتوجيه المباشر</h2>", unsafe_allow_html=True)
-    driver_pass = str_app.text_input("أدخل كلمة مرور السائقين:", type="password")
-    if driver_pass == "9988":
-        c.execute("SELECT name FROM drivers")
-        d_names_list = [d[0] for d in c.fetchall()]
-        if d_names_list:
-            active_driver = str_app.selectbox("اختر اسمك كساائق:", d_names_list)
-            c.execute("SELECT COUNT(*) FROM orders WHERE assigned_driver = ? AND order_status IN ('تم الاعتماد وبانتظار تجهيز المتجر', 'جاري التجهيز بالمطعم/المتجر')", (active_driver,))
-            if c.fetchone()[0] > 0:
-                play_sound_alert("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3")
-                str_app.warning(f"🚨 تنبيه يا كابتن {active_driver}: تم تعيين طلب جديد لك!")
-            
-            c.execute("SELECT id, customer_name, customer_phone, customer_address, customer_lat, customer_lon, store_name, store_lat, store_lon, items_desc, grand_total, order_status, assigned_driver FROM orders WHERE order_status IN ('تم الاعتماد وبانتظار تجهيز المتجر', 'جاري التجهيز بالمطعم/المتجر', 'مع السائق في طريقه للعميل') ORDER BY id DESC")
-            for dro in c.fetchall():
-                dro_id, dro_cn, dro_cp, dro_ca, dro_clat, dro_clon, dro_stname, dro_slat, dro_slon, dro_it, dro_tot, dro_stat, dro_assigned = dro
-                with str_app.expander(f"طلب رقم #{dro_id} من [{dro_stname}] للزبون {dro_cn} | الحالة: [{dro_stat}]"):
-                    str_app.write(f"📍 **عنوان التوصيل:** {dro_ca} | الهاتف: {dro_cp} | المبلغ المطلوب تحصيله: {dro_tot:.2f} د.أ")
-                    
-                    store_nav_url = f"https://www.google.com/maps/dir/?api=1&destination={dro_clat},{dro_clon}"
-                    str_app.markdown(f"""
-                        <div style="background-color: #e8f5e9; padding: 12px; border-radius: 8px; border: 1px solid #c8e6c9; margin-bottom: 10px;">
-                        🧭 <b>توجيه السائق (GPS Navigation):</b><br>
-                        • <a href="https://www.google.com/maps/?q={dro_slat},{dro_slon}" target="_blank">📍 موقع المتجر ({dro_stname})</a><br>
-                        • <a href="https://www.google.com/maps/?q={dro_clat},{dro_clon}" target="_blank">🏠 موقع الزبون ({dro_cn})</a><br>
-                        • <a href="{store_nav_url}" target="_blank" style="background-color: #2e7d32; color: white; padding: 6px 12px; border-radius: 5px; text-decoration: none; font-weight: bold; display: inline-block; margin-top: 5px;">🚗 اضغط هنا لبدء مسار التوجيه الصوتي والوصول للزبون (Google Maps Navigation)</a>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    col_d1, col_d2 = str_app.columns(2)
-                    with col_d1:
-                        if str_app.button(f"استلام الطلب والانطلاق #{dro_id}", key=f"take_ord_{dro_id}"):
-                            c.execute("UPDATE orders SET order_status = 'مع السائق في طريقه للعميل', assigned_driver = ? WHERE id = ?", (active_driver, dro_id))
-                            conn.commit()
-                            str_app.success("✅ تم الاستلام والانطلاق!")
-                            str_app.rerun()
-                    with col_d2:
-                        if str_app.button(f"تم التسليم بنجاح وإغلاق الطلب #{dro_id}", key=f"done_ord_{dro_id}"):
-                            c.execute("UPDATE orders SET order_status = 'تم التسليم بنجاح', assigned_driver = ? WHERE id = ?", (active_driver, dro_id))
-                            conn.commit()
-                            str_app.success("🎉 تم إغلاق الطلب بنجاح وتحديث حالته!")
-                            str_app.rerun()
+    str_app.markdown("<h2 style='color: #ff5a00;'>🛵 بوابة السائقين - مهام التوصيل (محمية برقم سري)</h2>", unsafe_allow_html=True)
+    
+    c.execute("SELECT name FROM drivers")
+    drv_names = [d[0] for d in c.fetchall()]
+    chosen_driver = str_app.selectbox("اختر اسمك كَسائق:", drv_names if drv_names else [""])
+    driver_entered_pin = str_app.text_input("أدخل الرقم السري الخاص بك:", type="password")
+    
+    auth_driver_ok = False
+    if chosen_driver and driver_entered_pin:
+        c.execute("SELECT pin_code FROM drivers WHERE name = ?", (chosen_driver,))
+        d_row_pin = c.fetchone()
+        if d_row_pin and d_row_pin[0] == driver_entered_pin:
+            auth_driver_ok = True
+        else:
+            str_app.error("❌ الرقم السري للسائق غير صحيح.")
+
+    if auth_driver_ok and chosen_driver:
+        str_app.success(f"🔓 أهلاً بك يا {chosen_driver}، تم تسجيل دخولك بنجاح.")
+        
+        c.execute("SELECT COUNT(*) FROM orders WHERE assigned_driver = ? AND order_status NOT LIKE '%تم التسليم%'", (chosen_driver,))
+        drv_tasks_cnt = c.fetchone()[0]
+        if drv_tasks_cnt > 0:
+            play_sound_alert("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3")
+            str_app.warning(f"🔔 تنبيه: لديك {drv_tasks_cnt} مهام توصيل بانتظار التنفيذ!")
+
+        c.execute("SELECT id, customer_name, customer_phone, customer_address, customer_lat, customer_lon, store_name, store_lat, store_lon, items_desc, grand_total, payment_method, order_status FROM orders WHERE assigned_driver = ? ORDER BY id DESC", (chosen_driver,))
+        driver_orders = c.fetchall()
+        if not driver_orders:
+            str_app.info(f"لا توجد طلبات معينة لك حالياً يا {chosen_driver}.")
+        else:
+            for dro in driver_orders:
+                d_id, d_cname, d_cphone, d_caddr, d_clat, d_clon, d_store, d_slat, d_slon, d_items, d_tot, d_pay, d_stat = dro
+                str_app.markdown(f"<div class='product-card'>", unsafe_allow_html=True)
+                str_app.markdown(f"### مهمة توصيل رقم #{d_id} | المتجر: {d_store}")
+                str_app.write(f"👤 الزبون: {d_cname} | 📱 الهاتف: {d_cphone} | 📍 العنوان: {d_caddr}")
+                
+                store_map_link = f"https://maps.google.com/?q={d_slat},{d_slon}"
+                cust_map_link = f"https://maps.google.com/?q={d_clat},{d_clon}"
+                str_app.markdown(f"📍 **[موقع المتجر على الخريطة]({store_map_link})** | 🎯 **[موقع العميل على الخريطة]({cust_map_link})**", unsafe_allow_html=True)
+                str_app.write(f"🛒 الأصناف: {d_items} | المطلوب تحصيله: **{d_tot:.2f} د.أ** ({d_pay})")
+                str_app.write(f"📌 حالة الطلب الحالية: {d_stat}")
+                
+                drv_new_st = str_app.selectbox(f"تحديث حالة التوصيل للطلب #{d_id}", ["مع السائق في طريقه للعميل", "تم التسليم بنجاح"], key=f"drv_st_box_{d_id}")
+                if str_app.button(f"تحديث حالة الطلب #{d_id}", key=f"drv_save_btn_{d_id}"):
+                    c.execute("UPDATE orders SET order_status = ? WHERE id = ?", (drv_new_st, d_id))
+                    conn.commit()
+                    str_app.success(f"✅ تم تحديث حالة الطلب #{d_id} بنجاح!")
+                    str_app.rerun()
+                str_app.markdown("</div>", unsafe_allow_html=True)
 
 conn.close()
