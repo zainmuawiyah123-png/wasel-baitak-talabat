@@ -1,5 +1,7 @@
+
 import sqlite3
 import streamlit as str_app
+import streamlit.components.v1 as components
 import pandas as pd
 import urllib.parse
 
@@ -17,7 +19,8 @@ def init_db():
             phone TEXT PRIMARY KEY,
             name TEXT,
             address TEXT,
-            location TEXT
+            lat REAL DEFAULT 31.2842,
+            lon REAL DEFAULT 35.7048
         )
     """)
     
@@ -27,6 +30,8 @@ def init_db():
             category TEXT, 
             phone TEXT, 
             location TEXT,
+            lat REAL,
+            lon REAL,
             delivery_time TEXT,
             delivery_fee REAL,
             image_url TEXT
@@ -65,7 +70,11 @@ def init_db():
             customer_name TEXT,
             customer_phone TEXT,
             customer_address TEXT,
+            customer_lat REAL DEFAULT 31.2842,
+            customer_lon REAL DEFAULT 35.7048,
             store_name TEXT,
+            store_lat REAL DEFAULT 31.2842,
+            store_lon REAL DEFAULT 35.7048,
             items_desc TEXT,
             sub_total REAL DEFAULT 0.0,
             delivery_fee REAL DEFAULT 1.50,
@@ -87,15 +96,33 @@ def init_db():
         )
     """)
     
+    # التحقق التلقائي من الأعمدة وإضافتها إذا لم تكن موجودة لتجنب أي خطأ
+    for table_name, col_def in [
+        ("orders", "customer_lat REAL DEFAULT 31.2842"),
+        ("orders", "customer_lon REAL DEFAULT 35.7048"),
+        ("orders", "store_lat REAL DEFAULT 31.2842"),
+        ("orders", "store_lon REAL DEFAULT 35.7048"),
+        ("stores", "lat REAL DEFAULT 31.2842"),
+        ("stores", "lon REAL DEFAULT 35.7048"),
+        ("customers", "lat REAL DEFAULT 31.2842"),
+        ("customers", "lon REAL DEFAULT 35.7048")
+    ]:
+        try:
+            c.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_def}")
+        except sqlite3.OperationalError:
+            pass # العمود موجود مسبقاً
+            
+    conn.commit()
+    
     c.execute("SELECT COUNT(*) FROM stores")
     if c.fetchone()[0] == 0:
         default_stores = [
-            ("سوبرماركت طبازه", "Groceries / بقالة", "0791111111", "الكرك - المرج", "15-25 mins", 1.25, "https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=300"),
-            ("مطعم الرمسي", "Food / مطاعم", "0795555555", "الكرك – شارع جامعة مؤته", "20-30 mins", 1.50, "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300"),
-            ("مطعم ليالي الكرك", "Food / مشاوي", "0796666666", "الكرك - المرج", "25-40 mins", 2.00, "https://images.unsplash.com/photo-1544025162-d76694265947?w=300"),
-            ("محمص الشعب", "Sweets /محامص", "0798888888", "الكرك - الثنيه", "10-20 mins", 1.00, "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=300")
+            ("سوبرماركت طبازه", "Groceries / بقالة", "0791111111", "الكرك - المرج", 31.2855, 35.7032, "15-25 mins", 1.25, "https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=300"),
+            ("مطعم الرمسي", "Food / مطاعم", "0795555555", "الكرك – شارع جامعة مؤته", 31.2820, 35.7010, "20-30 mins", 1.50, "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300"),
+            ("مطعم ليالي الكرك", "Food / مشاوي", "0796666666", "الكرك - المرج", 31.2860, 35.7050, "25-40 mins", 2.00, "https://images.unsplash.com/photo-1544025162-d76694265947?w=300"),
+            ("محمص الشعب", "Sweets /محامص", "0798888888", "الكرك - الثنيه", 31.2900, 35.7100, "10-20 mins", 1.00, "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=300")
         ]
-        c.executemany("INSERT OR IGNORE INTO stores (name, category, phone, location, delivery_time, delivery_fee, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)", default_stores)
+        c.executemany("INSERT OR IGNORE INTO stores (name, category, phone, location, lat, lon, delivery_time, delivery_fee, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", default_stores)
         
         default_products = [
             ("سوبرماركت طبازه", "تموينات", "سكر الأسرة الناعم (5 كغ)", "سكر أبيض نقي", 3.75, "كيس", "https://images.unsplash.com/photo-1581441363689-1f3c3c342617?w=300", 0),
@@ -171,6 +198,11 @@ if "current_portal" not in str_app.session_state:
 if "selected_category" not in str_app.session_state:
     str_app.session_state.selected_category = "الكل"
 
+if "lat" not in str_app.session_state:
+    str_app.session_state.lat = 31.2842
+if "lon" not in str_app.session_state:
+    str_app.session_state.lon = 35.7048
+
 str_app.sidebar.title("🧡 بوابة الكرك للطلبات")
 str_app.sidebar.markdown("---")
 
@@ -196,26 +228,62 @@ conn = get_db_connection()
 c = conn.cursor()
 
 if portal == "👤 تسجيل البيانات الشخصية":
-    str_app.markdown("<h2 style='color: #ff5a00;'>👤 تسجيل بيانات العميل / الزبون</h2>", unsafe_allow_html=True)
+    str_app.markdown("<h2 style='color: #ff5a00;'>👤 تسجيل بيانات العميل وتحديد الموقع تلقائياً</h2>", unsafe_allow_html=True)
     r_name = str_app.text_input("الاسم الكامل:", value=str_app.session_state.customer_name)
     r_phone = str_app.text_input("رقم الهاتف:", value=str_app.session_state.customer_phone)
     r_address = str_app.text_area("العنوان بالتفصيل:", value=str_app.session_state.customer_address)
     
+    str_app.markdown("#### 📍 تحديد الموقع الجغرافي (اللوكيشن التلقائي)")
+    
+    geo_html = f"""
+    <div style="padding: 10px; background: #e3f2fd; border-radius: 8px; border: 1px solid #90caf9; text-align: center;">
+        <p style="margin: 0 0 8px 0; font-weight: bold; color: #0d47a1;">اضغط على الزر أدناه لتحديد موقعك الحالي تلقائياً عبر GPS:</p>
+        <button onclick="getLocation()" style="background-color: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">📍 حدد موقعي الحالي تلقائياً</button>
+        <p id="geo_status" style="margin-top: 8px; font-weight: bold; color: #388e3c;"></p>
+    </div>
+    <script>
+    function getLocation() {{
+        var status = document.getElementById("geo_status");
+        if (navigator.geolocation) {{
+            status.innerHTML = "جاري تحديد موقعك...";
+            navigator.geolocation.getCurrentPosition(function(position) {{
+                var lat = position.coords.latitude;
+                var lon = position.coords.longitude;
+                status.innerHTML = "✅ تم تحديد موقعك بنجاح! (خط العرض: " + lat.toFixed(4) + ", خط الطول: " + lon.toFixed(4) + ")";
+            }}, function(error) {{
+                status.innerHTML = "❌ تعذر تحديد الموقع. يرجى السماح للمتصفح بالوصول للموقع.";
+            }});
+        }} else {{
+            status.innerHTML = "المتصفح لا يدعم خاصية تحديد الموقع.";
+        }}
+    }}
+    </script>
+    """
+    components.html(geo_html, height=130)
+    
+    col_l1, col_l2 = str_app.columns(2)
+    with col_l1:
+        r_lat = str_app.number_input("خط العرض الحالي (Lat):", value=str_app.session_state.lat, format="%.6f")
+    with col_l2:
+        r_lon = str_app.number_input("خط الطول الحالي (Lon):", value=str_app.session_state.lon, format="%.6f")
+        
     col_btn1, col_btn2 = str_app.columns([1, 1])
     with col_btn1:
-        save_clicked = str_app.button("حفظ وحفظه في النظام 🚀")
+        save_clicked = str_app.button("حفظ البيانات والموقع 🚀")
     with col_btn2:
         go_home_clicked = str_app.button("🏠 الانتقال إلى الرئيسية والبدء بالتسوق")
         
     if save_clicked or go_home_clicked:
         if r_name.strip() and r_phone.strip():
-            c.execute("INSERT OR REPLACE INTO customers (phone, name, address, location) VALUES (?, ?, ?, ?)", 
-                      (r_phone, r_name, r_address, "31.2842, 35.7048"))
+            c.execute("INSERT OR REPLACE INTO customers (phone, name, address, lat, lon) VALUES (?, ?, ?, ?, ?)", 
+                      (r_phone, r_name, r_address, r_lat, r_lon))
             conn.commit()
             str_app.session_state.customer_name = r_name
             str_app.session_state.customer_phone = r_phone
             str_app.session_state.customer_address = r_address
-            str_app.success("✅ تم حفظ بياناتك بنجاح!")
+            str_app.session_state.lat = r_lat
+            str_app.session_state.lon = r_lon
+            str_app.success("✅ تم حفظ بياناتك وموقعك الجغرافي بنجاح!")
             
             str_app.session_state.current_portal = "🏠 الرئيسية (Talabat Home)"
             str_app.rerun()
@@ -226,9 +294,10 @@ elif portal == "🏠 الرئيسية (Talabat Home)":
     str_app.markdown("<h1 style='color: #ff5a00; text-align: center; margin-bottom: 20px;'>بوابة الكرك للطلبات</h1>", unsafe_allow_html=True)
     col_loc, col_prof = str_app.columns([4, 1])
     with col_loc:
-        str_app.markdown(f"<h4 style='color: #ff5a00; margin-top: 0;'>📍 {str_app.session_state.customer_address}</h4>", unsafe_allow_html=True)
+        map_link = f"https://maps.google.com/?q={str_app.session_state.lat},{str_app.session_state.lon}"
+        str_app.markdown(f"<h4 style='color: #ff5a00; margin-top: 0;'>📍 موقعك الحالي: {str_app.session_state.customer_address} [<a href='{map_link}' target='_blank'>عرض على الخريطة</a>]</h4>", unsafe_allow_html=True)
     with col_prof:
-        if str_app.button("👤 تعديل بياناتي"):
+        if str_app.button("👤 تعديل بياناتي وموقعي"):
             str_app.session_state.current_portal = "👤 تسجيل البيانات الشخصية"
             str_app.rerun()
 
@@ -237,7 +306,6 @@ elif portal == "🏠 الرئيسية (Talabat Home)":
     categories_list = ["الكل"] + cat_stores
     
     str_app.markdown("#### 📂 أقسام المتاجر السريعة")
-    # عرض الأقسام بشكل صف أفقي (Row) متجاور لسهولة الاطلاع المباشر
     cols_cat = str_app.columns(len(categories_list) if len(categories_list) > 0 else 1)
     for idx, cat_name in enumerate(categories_list):
         with cols_cat[idx % len(cols_cat)]:
@@ -282,9 +350,9 @@ elif portal == "🏠 الرئيسية (Talabat Home)":
     str_app.markdown(f"### 🛒 المتاجر والمطاعم في قسم: `{selected_cat}`")
     
     if selected_cat == "الكل":
-        c.execute("SELECT name, category, delivery_time, delivery_fee, image_url FROM stores")
+        c.execute("SELECT name, category, location, lat, lon, delivery_time, delivery_fee, image_url FROM stores")
     else:
-        c.execute("SELECT name, category, delivery_time, delivery_fee, image_url FROM stores WHERE category = ?", (selected_cat,))
+        c.execute("SELECT name, category, location, lat, lon, delivery_time, delivery_fee, image_url FROM stores WHERE category = ?", (selected_cat,))
         
     all_stores = c.fetchall()
     
@@ -292,7 +360,7 @@ elif portal == "🏠 الرئيسية (Talabat Home)":
         str_app.info("لا توجد متاجر متاحة في هذا القسم حالياً.")
     else:
         st_cols = str_app.columns(2)
-        for idx, (s_name, s_cat, s_time, s_fee, s_img) in enumerate(all_stores):
+        for idx, (s_name, s_cat, s_loc, s_lat, s_lon, s_time, s_fee, s_img) in enumerate(all_stores):
             with st_cols[idx % 2]:
                 str_app.markdown("<div class='store-card'>", unsafe_allow_html=True)
                 if s_img and s_img.startswith("http"):
@@ -300,7 +368,9 @@ elif portal == "🏠 الرئيسية (Talabat Home)":
                 else:
                     str_app.markdown("<h1 style='text-align: center; font-size: 40px;'>🏪</h1>", unsafe_allow_html=True)
                 str_app.markdown(f"### {s_name}")
-                str_app.write(f"🏷️ {s_cat} | ⏱️ {s_time} | 🚚 {s_fee:.2f} JOD")
+                store_map_url = f"https://maps.google.com/?q={s_lat},{s_lon}"
+                str_app.write(f"🏷️ {s_cat} | 📍 {s_loc} [<a href='{store_map_url}' target='_blank'>الخريطة</a>]")
+                str_app.write(f"⏱️ {s_time} | 🚚 {s_fee:.2f} JOD")
                 if str_app.button(f"تصفح متجر {s_name}", key=f"btn_store_home_{idx}_{s_name}"):
                     str_app.session_state.active_store = s_name
                     str_app.session_state.current_portal = "🛒 تصفح المتاجر والسلة والدفع"
@@ -313,10 +383,11 @@ elif portal == "🛒 تصفح المتاجر والسلة والدفع":
         str_app.rerun()
 
     str_app.markdown("<h2 style='color: #ff5a00;'>🛒 سلة الطلبات ودفع الفواتير</h2>", unsafe_allow_html=True)
-    c.execute("SELECT name, delivery_fee FROM stores")
+    c.execute("SELECT name, delivery_fee, lat, lon FROM stores")
     stores_data = c.fetchall()
     store_names = [s[0] for s in stores_data]
     store_fees_map = {s[0]: s[1] for s in stores_data}
+    store_coords_map = {s[0]: (s[2], s[3]) for s in stores_data}
     
     default_st = str_app.session_state.get("active_store", store_names[0] if store_names else "")
     chosen_store = str_app.selectbox("اختر المتجر أو المطعم للتسوق منه:", store_names, index=store_names.index(default_st) if default_st in store_names else 0)
@@ -386,7 +457,6 @@ elif portal == "🛒 تصفح المتاجر والسلة والدفع":
                     c_phone = str_app.text_input("رقم الهاتف:", value=str_app.session_state.customer_phone)
                     c_addr = str_app.text_input("عنوان التوصيل بالتفصيل:", value=str_app.session_state.customer_address)
                     
-                    # خيارات الدفع المحدثة بالكامل
                     pay_method = str_app.selectbox("طريقة الدفع:", [
                         "الدفع نقداً عند الاستلام", 
                         "CliQ - samarza (بنك الاتحاد)", 
@@ -398,14 +468,15 @@ elif portal == "🛒 تصفح المتاجر والسلة والدفع":
                 if submit_order:
                     if c_name.strip() and c_phone.strip():
                         items_desc_str = ", ".join([f"{i[2]} ({i[4]})" for i in cart_items])
+                        st_lat_val, st_lon_val = store_coords_map.get(chosen_store, (31.2842, 35.7048))
+                        
                         c.execute("""
-                            INSERT INTO orders (customer_name, customer_phone, customer_address, store_name, items_desc, sub_total, delivery_fee, service_fee, grand_total, payment_method, order_status, assigned_driver)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'جديد (بانتظار الإدارة)', 'لم يُعين بعد')
-                        """, (c_name, c_phone, c_addr, chosen_store, items_desc_str, sub_total, current_delivery_fee, service_fee, grand_total, pay_method))
+                            INSERT INTO orders (customer_name, customer_phone, customer_address, customer_lat, customer_lon, store_name, store_lat, store_lon, items_desc, sub_total, delivery_fee, service_fee, grand_total, payment_method, order_status, assigned_driver)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'جديد (بانتظار الإدارة)', 'لم يُعين بعد')
+                        """, (c_name, c_phone, c_addr, str_app.session_state.lat, str_app.session_state.lon, chosen_store, st_lat_val, st_lon_val, items_desc_str, sub_total, current_delivery_fee, service_fee, grand_total, pay_method))
                         
                         conn.commit()
                         
-                        # جلب رقم الطلب الأخير لإرساله في رسالة الواتساب
                         c.execute("SELECT last_insert_rowid()")
                         new_order_id = c.fetchone()[0]
                         
@@ -414,8 +485,7 @@ elif portal == "🛒 تصفح المتاجر والسلة والدفع":
                         
                         str_app.success("🎉 تم إرسال طلبك بنجاح!")
                         
-                        # إرسال رسالة واتساب لميرال (962797088219) تلقائياً عند تأكيد الطلب
-                        whatsapp_msg = f"طلب جديد # {new_order_id}%0aالزبون: {c_name}%0aالهاتف: {c_phone}%0aالعنوان: {c_addr}%0aالمتجر: {chosen_store}%0aالأصناف: {items_desc_str}%0aالإجمالي: {grand_total:.2f} د.أ%0aطريقة الدفع: {pay_method}"
+                        whatsapp_msg = f"طلب جديد # {new_order_id}%0aالزبون: {c_name}%0aالهاتف: {c_phone}%0aالعنوان: {c_addr}%0a[لوكيشن الزبون]: https://maps.google.com/?q={str_app.session_state.lat},{str_app.session_state.lon}%0aالمتجر: {chosen_store}%0aالأصناف: {items_desc_str}%0aالإجمالي: {grand_total:.2f} د.أ%0aطريقة الدفع: {pay_method}"
                         miral_phone = "962797088219"
                         wa_url = f"https://api.whatsapp.com/send?phone={miral_phone}&text={whatsapp_msg}"
                         
@@ -444,8 +514,8 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
         tab1, tab2, tab3, tab4, tab5 = str_app.tabs(["📦 إدارة ومتابعة الطلبات", "🏪 إدارة المتاجر", "🍔 إدارة الأصناف والأسعار", "📥 الاستيراد الآلي (CSV)", "🛵 إدارة السائقين"])
         
         with tab1:
-            str_app.markdown("### 🔔 الطلبات الواردة وتوجيهها وإرسالها للبائع:")
-            c.execute("SELECT id, customer_name, customer_phone, customer_address, store_name, items_desc, grand_total, payment_method, order_status, assigned_driver FROM orders ORDER BY id DESC")
+            str_app.markdown("### 🔔 الطلبات الواردة ومواقع الزبائن والمتاجر وتوجيهها:")
+            c.execute("SELECT id, customer_name, customer_phone, customer_address, customer_lat, customer_lon, store_name, store_lat, store_lon, items_desc, grand_total, payment_method, order_status, assigned_driver FROM orders ORDER BY id DESC")
             orders_all = c.fetchall()
             if not orders_all:
                 str_app.info("لا توجد طلبات جديدة حالياً.")
@@ -455,20 +525,22 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
                 drivers_list = [d[0] for d in drivers_data_all]
                 
                 for ord_item in orders_all:
-                    oid, ocname, ocphone, ocaddr, ostore, oitems, otot, opay, ostat, odrv = ord_item
+                    oid, ocname, ocphone, ocaddr, oclat, oclon, ostore, oslat, oslon, oitems, otot, opay, ostat, odrv = ord_item
                     with str_app.expander(f"طلب رقم #{oid} | متجر: {ostore} | الزبون: {ocname} | الحالة: [{ostat}]"):
                         str_app.write(f"📱 الهاتف: {ocphone} | العنوان: {ocaddr}")
+                        cust_map_url = f"https://maps.google.com/?q={oclat},{oclon}"
+                        store_map_url = f"https://maps.google.com/?q={oslat},{oslon}"
+                        str_app.markdown(f"📍 **لوكيشن الزبون:** [<a href='{cust_map_url}' target='_blank'>فتح موقع العميل على الخريطة</a>] | 🏪 **لوكيشن المتجر:** [<a href='{store_map_url}' target='_blank'>فتح موقع المتجر</a>]", unsafe_allow_html=True)
                         str_app.write(f"🛒 الأصناف: {oitems} | الإجمالي: {otot:.2f} د.أ | الدفع: {opay}")
                         
-                        # زر إرسال واتساب من الإدارة إلى البائع مباشرة مع التنبيه
                         c.execute("SELECT phone FROM stores WHERE name = ?", (ostore,))
                         st_phone_row = c.fetchone()
                         store_contact_phone = st_phone_row[0] if st_phone_row and st_phone_row[0] else "962790000000"
                         
-                        seller_msg = f"طلب جديد رقم #{oid} موجه لمتجركم ({ostore})%0aالزبون: {ocname}%0aالهاتف: {ocphone}%0aالعنوان: {ocaddr}%0aالأصناف المطلوب تجهيزها: {oitems}%0aالمبلغ المطلوب تحصيله: {otot:.2f} د.أ (%0aطريقة الدفع: {opay})%0aيرجى التجهيز الفوري!"
+                        seller_msg = f"طلب جديد رقم #{oid} موجه لمتجركم ({ostore})%0aالزبون: {ocname}%0aالهاتف: {ocphone}%0aالعنوان: {ocaddr}%0a[لوكيشن الزبون]: https://maps.google.com/?q={oclat},{oclon}%0aالأصناف المطلوب تجهيزها: {oitems}%0aالمبلغ المطلوب تحصيله: {otot:.2f} د.أ (%0aطريقة الدفع: {opay})%0aيرجى التجهيز الفوري!"
                         seller_wa_url = f"https://api.whatsapp.com/send?phone={store_contact_phone}&text={seller_msg}"
                         
-                        str_app.markdown(f"<a href='{seller_wa_url}' target='_blank' style='background-color:#25d366; color:white; padding:8px 15px; border-radius:6px; text-decoration:none; font-weight:bold; display:inline-block; margin-bottom:10px;'>📤 إرسال تفاصيل الطلب للبائع عبر الواتساب</a>", unsafe_allow_html=True)
+                        str_app.markdown(f"<a href='{seller_wa_url}' target='_blank' style='background-color:#25d366; color:white; padding:8px 15px; border-radius:6px; text-decoration:none; font-weight:bold; display:inline-block; margin-bottom:10px;'>📤 إرسال تفاصيل الطلب واللوكيشن للبائع عبر الواتساب</a>", unsafe_allow_html=True)
                         
                         col_st1, col_st2 = str_app.columns(2)
                         with col_st1:
@@ -483,20 +555,22 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
                             str_app.rerun()
 
         with tab2:
-            str_app.markdown("### 🏪 إدارة المتاجر:")
+            str_app.markdown("### 🏪 إدارة المتاجر وإحداثياتها:")
             with str_app.form("add_store_form"):
                 ns_name = str_app.text_input("اسم المتجر أو المطعم:")
                 ns_cat = str_app.text_input("التصنيف (مثال: مطاعم):")
                 ns_phone = str_app.text_input("رقم هاتف المتجر (لإرسال الطلبات واتساب):")
                 ns_loc = str_app.text_input("العنوان والمنطقة:")
+                ns_slat = str_app.number_input("خط عرض المتجر (Lat):", value=31.2842, format="%.6f")
+                ns_slon = str_app.number_input("خط طول المتجر (Lon):", value=35.7048, format="%.6f")
                 ns_time = str_app.text_input("وقت التوصيل:", value="15-25 mins")
                 ns_fee = str_app.number_input("أجور التوصيل (د.أ):", value=1.50)
                 ns_img = str_app.text_input("رابط صورة المتجر (اختياري):")
                 
                 if str_app.form_submit_button("حفظ المتجر ➕"):
                     if ns_name.strip():
-                        c.execute("INSERT OR REPLACE INTO stores (name, category, phone, location, delivery_time, delivery_fee, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                  (ns_name, ns_cat, ns_phone, ns_loc, ns_time, ns_fee, ns_img))
+                        c.execute("INSERT OR REPLACE INTO stores (name, category, phone, location, lat, lon, delivery_time, delivery_fee, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                  (ns_name, ns_cat, ns_phone, ns_loc, ns_slat, ns_slon, ns_time, ns_fee, ns_img))
                         conn.commit()
                         str_app.success(f"✅ تم حفظ المتجر '{ns_name}' بنجاح!")
                         str_app.rerun()
@@ -530,8 +604,6 @@ elif portal == "🔔 لوحة الإدارة المركزية (تحكم كامل
 
         with tab4:
             str_app.markdown("### 📥 الاستيراد والتحديث الآلي للأسعار (CSV Import)")
-            str_app.markdown("اختر المتجر أولاً لتحديث أصنافه وأسعارها عبر ملف الـ CSV المعرف بالأعمدة: `الاسم`، `السعر`، `الصورة`")
-            
             c.execute("SELECT name FROM stores")
             csv_stores_list = [s[0] for s in c.fetchall()]
             target_csv_store = str_app.selectbox("اختر المتجر المراد تحديث أصنافه:", csv_stores_list) if csv_stores_list else None
@@ -602,11 +674,14 @@ elif portal == "🏪 بوابة المتاجر (تجهيز الطلبات)":
                 play_sound_alert("https://assets.mixkit.co/active_storage/sfx/2860/2860-preview.mp3")
                 str_app.warning("🛎️ تنبيه بوجود طلب جديد موجه لمتجرك!")
             
-            c.execute("SELECT id, customer_name, customer_phone, customer_address, items_desc, grand_total, payment_method, order_status, assigned_driver FROM orders WHERE store_name = ? ORDER BY id DESC", (my_store,))
+            c.execute("SELECT id, customer_name, customer_phone, customer_address, customer_lat, customer_lon, items_desc, grand_total, payment_method, order_status, assigned_driver FROM orders WHERE store_name = ? ORDER BY id DESC", (my_store,))
             for so in c.fetchall():
-                so_id, so_cn, so_cp, so_ca, so_it, so_tot, so_pay, so_st, so_drv = so
+                so_id, so_cn, so_cp, so_ca, so_clat, so_clon, so_it, so_tot, so_pay, so_st, so_drv = so
                 with str_app.expander(f"طلب #{so_id} للزبون {so_cn} | الحالة: [{so_st}]"):
-                    str_app.write(f"📱 الهاتف: {so_cp} | العنوان: {so_ca} | الأصناف: {so_it} | الإجمالي: {so_tot:.2f} د.أ | الدفع: {so_pay}")
+                    cust_map_url = f"https://maps.google.com/?q={so_clat},{so_clon}"
+                    str_app.write(f"📱 الهاتف: {so_cp} | العنوان: {so_ca}")
+                    str_app.markdown(f"📍 **لوكيشن العميل:** [<a href='{cust_map_url}' target='_blank'>فتح موقع العميل على خرائط جوجل</a>]", unsafe_allow_html=True)
+                    str_app.write(f"🛒 الأصناف: {so_it} | الإجمالي: {so_tot:.2f} د.أ | الدفع: {so_pay}")
                     if str_app.button(f"تجهيز الطلب #{so_id}", key=f"prep_store_{so_id}"):
                         c.execute("UPDATE orders SET order_status = 'جاري التجهيز بالمطعم/المتجر' WHERE id = ?", (so_id,))
                         conn.commit()
@@ -614,7 +689,7 @@ elif portal == "🏪 بوابة المتاجر (تجهيز الطلبات)":
                         str_app.rerun()
 
 elif portal == "🛵 بوابة السائقين (الاستلام والتوصيل)":
-    str_app.markdown("<h2 style='color: #ff5a00;'>🛵 بوابة السائقين</h2>", unsafe_allow_html=True)
+    str_app.markdown("<h2 style='color: #ff5a00;'>🛵 بوابة السائقين والتوجيه المباشر</h2>", unsafe_allow_html=True)
     driver_pass = str_app.text_input("أدخل كلمة مرور السائقين:", type="password")
     if driver_pass == "9988":
         c.execute("SELECT name FROM drivers")
@@ -626,11 +701,22 @@ elif portal == "🛵 بوابة السائقين (الاستلام والتوص�
                 play_sound_alert("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3")
                 str_app.warning(f"🚨 تنبيه يا كابتن {active_driver}: تم تعيين طلب جديد لك!")
             
-            c.execute("SELECT id, customer_name, customer_phone, customer_address, store_name, items_desc, grand_total, order_status, assigned_driver FROM orders WHERE order_status IN ('تم الاعتماد وبانتظار تجهيز المتجر', 'جاري التجهيز بالمطعم/المتجر', 'مع السائق في طريقه للعميل') ORDER BY id DESC")
+            c.execute("SELECT id, customer_name, customer_phone, customer_address, customer_lat, customer_lon, store_name, store_lat, store_lon, items_desc, grand_total, order_status, assigned_driver FROM orders WHERE order_status IN ('تم الاعتماد وبانتظار تجهيز المتجر', 'جاري التجهيز بالمطعم/المتجر', 'مع السائق في طريقه للعميل') ORDER BY id DESC")
             for dro in c.fetchall():
-                dro_id, dro_cn, dro_cp, dro_ca, dro_stname, dro_it, dro_tot, dro_stat, dro_assigned = dro
+                dro_id, dro_cn, dro_cp, dro_ca, dro_clat, dro_clon, dro_stname, dro_slat, dro_slon, dro_it, dro_tot, dro_stat, dro_assigned = dro
                 with str_app.expander(f"طلب رقم #{dro_id} من [{dro_stname}] للزبون {dro_cn} | الحالة: [{dro_stat}]"):
-                    str_app.write(f"📍 العنوان: {dro_ca} | الهاتف: {dro_cp} | المبلغ: {dro_tot:.2f} د.أ")
+                    str_app.write(f"📍 **عنوان التوصيل:** {dro_ca} | الهاتف: {dro_cp} | المبلغ المطلوب تحصيله: {dro_tot:.2f} د.أ")
+                    
+                    store_nav_url = f"https://www.google.com/maps/dir/?api=1&destination={dro_clat},{dro_clon}"
+                    str_app.markdown(f"""
+                        <div style="background-color: #e8f5e9; padding: 12px; border-radius: 8px; border: 1px solid #c8e6c9; margin-bottom: 10px;">
+                        🧭 <b>توجيه السائق (GPS Navigation):</b><br>
+                        • <a href="https://www.google.com/maps/?q={dro_slat},{dro_slon}" target="_blank">📍 موقع المتجر ({dro_stname})</a><br>
+                        • <a href="https://www.google.com/maps/?q={dro_clat},{dro_clon}" target="_blank">🏠 موقع الزبون ({dro_cn})</a><br>
+                        • <a href="{store_nav_url}" target="_blank" style="background-color: #2e7d32; color: white; padding: 6px 12px; border-radius: 5px; text-decoration: none; font-weight: bold; display: inline-block; margin-top: 5px;">🚗 اضغط هنا لبدء مسار التوجيه الصوتي والوصول للزبون (Google Maps Navigation)</a>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
                     col_d1, col_d2 = str_app.columns(2)
                     with col_d1:
                         if str_app.button(f"استلام الطلب والانطلاق #{dro_id}", key=f"take_ord_{dro_id}"):
@@ -639,10 +725,10 @@ elif portal == "🛵 بوابة السائقين (الاستلام والتوص�
                             str_app.success("✅ تم الاستلام والانطلاق!")
                             str_app.rerun()
                     with col_d2:
-                        if str_app.button(f"تم التسليم بنجاح #{dro_id}", key=f"done_ord_{dro_id}"):
+                        if str_app.button(f"تم التسليم بنجاح وإغلاق الطلب #{dro_id}", key=f"done_ord_{dro_id}"):
                             c.execute("UPDATE orders SET order_status = 'تم التسليم بنجاح', assigned_driver = ? WHERE id = ?", (active_driver, dro_id))
                             conn.commit()
-                            str_app.success("🎉 تم إغلاق الطلب بنجاح!")
+                            str_app.success("🎉 تم إغلاق الطلب بنجاح وتحديث حالته!")
                             str_app.rerun()
 
 conn.close()
